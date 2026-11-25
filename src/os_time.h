@@ -92,8 +92,10 @@ static inline void  platform_time_get_highres_tick_64(uint64_t* t)
 {
     uint64_t tsc;
 #if defined(USE_HIGH_RES_CYCLES_COUNTER)
+    /* NOTE: Requires kernel EL0 PMU access enabled (e.g., via PMUSERENR_EL0) */
     asm volatile("mrs %0, pmccntr_el0" : "=r"(tsc));
 #else
+    asm volatile("isb" : : : "memory");
     asm volatile("mrs %0, cntvct_el0" : "=r" (tsc));
 #endif
     *t = tsc;
@@ -137,7 +139,13 @@ static inline uint32_t  platform_time_get_highres_tick_32()
 }
 
 static inline hr_time_t    os_get_hr_freq(void){
+#if defined(__aarch64__)
+    uint64_t freq;
+    asm volatile("mrs %0, cntfrq_el0" : "=r" (freq));
+    return freq;
+#else
 	return (3000000000ULL);
+#endif
 }
 
 static inline hr_time_t os_get_hr_tick_64(void) {
