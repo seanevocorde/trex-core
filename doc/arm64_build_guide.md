@@ -16,6 +16,7 @@ TRex 采用源码内嵌 DPDK 并通过 Waf 构建系统进行管理的方式。�
    * 更新了 EAL arm 源码目录，由过时的 `lib/eal/common/arch/arm/` 改为 `lib/eal/arm/`，并补充了 `rte_hypervisor.c`、`rte_mmu.c` 和 `rte_power_intrinsics.c`。
    * 分离了通用组 `dpdk_src` 中的 x86 SSE 源码，为 aarch64 接入 Neon 向量化实现（`bnxt_rxtx_vec_neon.c`、`iavf_rxtx_vec_neon.c`、`i40e_rxtx_vec_neon.c`）。
    * 补齐了 aarch64 下的 Intel i40e PMD 驱动依赖和 Mellanox (mlx5) 构建分支。
+   * 解除 GCC 编译全局硬编码的 x86 TSX 指令集标志 `-mrtm`，将其限制在 Intel x86 平台生效，避免 ARM GCC 报 `unrecognized command-line option '-mrtm'` 错误。
    * 修复了安装软链接时目标目录 `scripts/so/aarch64` 缺失的问题。
 3. **高精度时钟抽象 `src/os_time.h` 优化**：
    * 在读取 `cntvct_el0` 虚拟时钟时增加了 `isb` 内存屏障保障指令顺序。
