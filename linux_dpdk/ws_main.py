@@ -58,7 +58,6 @@ gcc_flags = ['-Wall',
              '-Wno-literal-suffix',
              '-Wno-sign-compare',
              '-Wno-strict-aliasing',
-             '-mrtm',
              '-Wno-address-of-packed-member']
 
 
@@ -2558,6 +2557,9 @@ class build_option:
             flags += clang_flags
         else:
             flags += gcc_flags
+
+        if self.isIntelPlatform() and not self.is_clang():
+            flags += ['-mrtm']
 
         if (self.isIntelPlatform() or self.isPpcPlatform()) and not self.is_clang():
             flags += [
