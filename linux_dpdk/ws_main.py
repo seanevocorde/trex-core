@@ -797,9 +797,14 @@ def check_version_glibc(lib_so):
 def configure(conf):
 
     conf.find_program('strings')
-    so = ['/usr/lib/x86_64-linux-gnu/libstdc++.so.6','/usr/lib64/libstdc++.so.6']
-    our_so =  '../scripts/so/x86_64/libstdc++.so.6'
-    d_so =  '../scripts/so/x86_64/_libstdc++.so.6'
+    if march == 'aarch64':
+        so = ['/usr/lib/aarch64-linux-gnu/libstdc++.so.6', '/usr/lib64/libstdc++.so.6']
+    elif march == 'ppc64le':
+        so = ['/usr/lib/powerpc64le-linux-gnu/libstdc++.so.6', '/usr/lib64/libstdc++.so.6']
+    else:
+        so = ['/usr/lib/x86_64-linux-gnu/libstdc++.so.6', '/usr/lib64/libstdc++.so.6']
+    our_so = '../scripts/so/' + march + '/libstdc++.so.6'
+    d_so = '../scripts/so/' + march + '/_libstdc++.so.6'
     ver = check_version_glibc(so)
     if ver > 3424:
         Logs.pprint('YELLOW', 'you have newer {} libstdc++.so remove the old one, do not commit this \n'.format(ver))

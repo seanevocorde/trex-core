@@ -61,7 +61,31 @@ cp /tmp/zmq_arm64/lib/libzmq.so.5 scripts/external_libs/pyzmq-ctypes/zmq/arm/lib
 
 ---
 
-### 2. Mellanox / OFED 动态库（使用 CX4/CX5/CX6 网卡时必须）
+### 2. C++ 标准库 `libstdc++.so.6` 的适配与处理
+
+#### 为什么需要关注 `libstdc++.so.6`？
+TRex 编译生成的可执行二进制（如 `_t-rex-64`）配置了动态库优先查找路径 `rpath = ['so', 'so/' + march]`（即程序启动时会最先在 `scripts/so/<arch>/` 目录下查找动态库）。
+* **历史原因**：在 x86_64 平台，TRex 官方为了兼容老旧发行版（如 CentOS 7 自带的 GCC 4.8.5，其 `libstdc++.so.6` 只支持到 `GLIBCXX_3.4.19`），在 `scripts/so/x86_64/` 目录下随包分发了一个高版本 GCC 编译的 `libstdc++.so.6`（提供 `GLIBCXX_3.4.24`）。
+* **潜在冲突**：如果 `scripts/so/<arch>/` 下放置了自带的 `libstdc++.so.6`，但目标操作系统自带更高版本的 `libstdc++.so.6`（如 `GLIBCXX_3.4.25+`），会导致依赖系统高版本 C++ 库的其他组件（如系统 Python、OpenSSL、libibverbs 等）出现符号查找错误：
+  `version 'GLIBCXX_3.4.xx' not found (required by ...)`。
+
+#### ARM64 架构下的适配建议：
+
+* **场景 A：本地源码编译并在本地或现代 OS 上运行（最推荐）**：
+  * 当前 ARM64 的主流 Linux 发行版（Ubuntu 20.04/22.04/24.04、openEuler 22.03+、Debian 11+、Kylin V10 等）系统自带的 GCC 均在 GCC 8/9/11/12 以上，其系统的 `/usr/lib/aarch64-linux-gnu/libstdc++.so.6`（或 `/usr/lib64/libstdc++.so.6`）已完全原生满足 TRex 的 C++11 要求。
+  * **处理方式**：`scripts/so/aarch64/` 下**保持空置（无需放置 libstdc++.so.6）**。动态链接器会在该目录下找不到时自动 fallback 到操作系统的标准库，这种方式最为干净，且绝对不会发生系统库版本冲突。
+  * `ws_main.py` 的 `configure()` 现已适配 ARM64 系统的库路径，若本地存在旧库会自动检测并在系统库更新时将其重命名避免冲突。
+
+* **场景 B：打包分发给老旧 ARM64 发行版（如旧版定制固件或老 CentOS 7 aarch64）**：
+  * 若目标运行机缺少高版本 GCC 运行时，可从编译机（GCC 7+）中提取 `libstdc++.so.6` 拷贝到 `scripts/so/aarch64/`：
+    ```bash
+    cp $(gcc -print-file-name=libstdc++.so.6) scripts/so/aarch64/libstdc++.so.6
+    ```
+  * 随包分发即可保证老系统能正常加载 C++ 运行时符号。
+
+---
+
+### 3. Mellanox / OFED 动态库（使用 CX4/CX5/CX6 网卡时必须）
 
 若在 ARM64 机器上使用 Mellanox (NVIDIA) 网卡，TRex 需要 `libibverbs.so` 和 `libmlx5.so`。
 
@@ -89,7 +113,7 @@ cp /tmp/zmq_arm64/lib/libzmq.so.5 scripts/external_libs/pyzmq-ctypes/zmq/arm/lib
 
 ---
 
-### 3. ARM64 用户态高精度 PMU 周期计数器（可选性能项）
+### 4. ARM64 用户态高精度 PMU 周期计数器（可选性能项）
 
 #### 说明：
 * 默认情况下，TRex 使用 ARM 系统通用虚拟计数器 `cntvct_el0`。它的频率通常在 **25 MHz ~ 100 MHz**，足以保证日常大部分吞吐量和功能测试正常运行。
