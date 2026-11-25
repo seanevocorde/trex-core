@@ -1436,6 +1436,9 @@ dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
                  'drivers/net/bonding/rte_eth_bond_8023ad.c',
                  'drivers/net/bonding/rte_eth_bond_alb.c',
 
+                 #vec sse
+                 'drivers/net/bnxt/bnxt_rxtx_vec_sse.c',
+                 'drivers/net/intel/iavf/iavf_rxtx_vec_sse.c',
                  ])
 
 dpdk_src_x86_64_ext = SrcGroup(dir='src',
@@ -1463,10 +1466,17 @@ dpdk_src_aarch64 = SrcGroup(dir='src/dpdk/',
                  #virtio
                  'drivers/net/virtio/virtio_rxtx_simple_neon.c',
 
-                 #libs
-                 'lib/eal/common/arch/arm/rte_cpuflags.c',
-                 'lib/eal/common/arch/arm/rte_cycles.c',
+                 #intel / bnxt neon
+                 'drivers/net/intel/i40e/i40e_rxtx_vec_neon.c',
+                 'drivers/net/intel/iavf/iavf_rxtx_vec_neon.c',
+                 'drivers/net/bnxt/bnxt_rxtx_vec_neon.c',
 
+                 #libs
+                 'lib/eal/arm/rte_cpuflags.c',
+                 'lib/eal/arm/rte_cycles.c',
+                 'lib/eal/arm/rte_hypervisor.c',
+                 'lib/eal/arm/rte_mmu.c',
+                 'lib/eal/arm/rte_power_intrinsics.c',
                  ])
 
 
@@ -1524,7 +1534,6 @@ dpdk_src = SrcGroup(dir='src/dpdk/',
                  'drivers/net/bnxt/bnxt_vnic.c',
                  'drivers/net/bnxt/bnxt_reps.c',
                  'drivers/net/bnxt/rte_pmd_bnxt.c',
-                 'drivers/net/bnxt/bnxt_rxtx_vec_sse.c',
 
                  'drivers/net/bnxt/tf_core/tf_core.c',
                  'drivers/net/bnxt/tf_core/bitalloc.c',
@@ -1682,7 +1691,6 @@ dpdk_src = SrcGroup(dir='src/dpdk/',
                  'drivers/net/intel/iavf/iavf_generic_flow.c',
                  'drivers/net/intel/iavf/iavf_hash.c',
                  'drivers/net/intel/iavf/iavf_fdir.c',
-                 'drivers/net/intel/iavf/iavf_rxtx_vec_sse.c',
 
                  'drivers/net/intel/iavf/base/iavf_adminq.c',
                  'drivers/net/intel/iavf/base/iavf_common.c',
@@ -1991,7 +1999,7 @@ bnxt_dpdk_src = SrcGroup(dir='src/dpdk/',
                  'drivers/net/bnxt/bnxt_vnic.c',
                  'drivers/net/bnxt/bnxt_reps.c',
                  'drivers/net/bnxt/rte_pmd_bnxt.c',
-                 'drivers/net/bnxt/bnxt_rxtx_vec_sse.c',
+                 ('drivers/net/bnxt/bnxt_rxtx_vec_neon.c' if march == 'aarch64' else 'drivers/net/bnxt/bnxt_rxtx_vec_sse.c'),
             ])
 
 memif_dpdk_src = SrcGroup(
@@ -2339,7 +2347,7 @@ bpf_includes_path = '../external_libs/bpf ../external_libs/bpf/bpfjit'
 if march == 'x86_64':
     DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk_2507_x86_64/rte_config.h','-DALLOW_INTERNAL_API','-DABI_VERSION="25.2"']
 elif march == 'aarch64':
-    DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-include', '../src/pal/linux_dpdk/dpdk_2507_x86_64_aarch64/rte_config.h']
+    DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-include', '../src/pal/linux_dpdk/dpdk_2507_aarch64/rte_config.h', '-DALLOW_INTERNAL_API', '-DABI_VERSION="25.2"']
 elif march == 'ppc64le':
     DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk_2507_x86_64_ppc64le/rte_config.h']
 
@@ -2663,8 +2671,12 @@ def build_prog (bld, build_obj):
     elif march == 'aarch64':
         bp_dpdk = SrcGroups([
                     dpdk_src,
+                    i40e_dpdk_src,
                     dpdk_src_aarch64
                     ])
+
+        if bld.env.TAP:
+            bp_dpdk.list_group.append(dpdk_src_x86_64_tap)
 
         # software BPF
         bpf = SrcGroups([bpf_src])
@@ -2724,6 +2736,18 @@ def build_prog (bld, build_obj):
                   cflags   = (cflags + DPDK_FLAGS + build_obj.get_mlx5_flags() ),
                   use      = ['ibverbs','mlx5'] + bld.env.mlx5_use,
                   source   = mlx5_ppc64le_dpdk.file_list(top),
+                  target   = build_obj.get_mlx5_target(),
+                  **bld.env.mlx5_kw
+                )
+            elif march == 'aarch64':
+                bld.shlib(
+                  features='c',
+                  includes = dpdk_includes_path +
+                             bld.env.dpdk_includes_verb_path +
+                             bld.env.libmnl_path,
+                  cflags   = (cflags + DPDK_FLAGS + build_obj.get_mlx5_flags() ),
+                  use      = ['ibverbs','mlx5'] + bld.env.mlx5_use,
+                  source   = mlx5_x86_64_dpdk.file_list(top),
                   target   = build_obj.get_mlx5_target(),
                   **bld.env.mlx5_kw
                 )
@@ -2935,6 +2959,11 @@ def do_create_link (src, name, where):
 def install_single_system (bld, exec_p, build_obj):
 
     o = bld.out_dir+'/linux_dpdk/'
+    if not os.path.exists(so_path):
+        try:
+            os.makedirs(so_path)
+        except OSError:
+            pass
 
     # executable
     do_create_link(src = os.path.realpath(o + build_obj.get_target()),
