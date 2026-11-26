@@ -2149,7 +2149,6 @@ elif march == 'aarch64':
     common_flags_new = common_flags + [
                        '-march=native',
                        '-mtune=cortex-a72',
-                       '-DRTE_ARCH_64',
                        '-DRTE_FORCE_INTRINSICS',
                        '-DRTE_MACHINE_NEON',
                        '-DRTE_MACHINE_EVTSTRM',
@@ -2163,7 +2162,6 @@ elif march == 'aarch64':
     common_flags_old = common_flags + [
                        '-march=native',
                        '-mtune=cortex-a53',
-                       '-DRTE_ARCH_64',
                        '-DRTE_FORCE_INTRINSICS',
                        '-DRTE_MACHINE_NEON',
                        '-DRTE_MACHINE_CRC32',
