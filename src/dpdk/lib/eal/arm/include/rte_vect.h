@@ -6,6 +6,7 @@
 #define _RTE_VECT_ARM_H_
 
 #include <stdint.h>
+#include <rte_config.h>
 #include "generic/rte_vect.h"
 #include "rte_debug.h"
 #include "arm_neon.h"

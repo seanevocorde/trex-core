@@ -2811,11 +2811,11 @@ def build_prog (bld, build_obj):
         )
 
     inc_path = dpdk_includes_path + includes_path
-    cxxflags_ext = ['',]
+    cxxflags_ext = ['-include', '../src/pal/linux_dpdk/dpdk_2507_' + march + '/rte_config.h'] if march in ('x86_64', 'aarch64') else []
 
     bld.program(features='cxx cxxprogram',
                 includes =inc_path + tcp_includes_path,
-                cxxflags = ( cxxflags + ['-std=gnu++11']),
+                cxxflags = ( cxxflags + cxxflags_ext + ['-std=gnu++11']),
                 linkflags = linkflags ,
                 lib=['pthread','dl', 'z'] + lib_ext,
                 use =[build_obj.get_dpdk_target(), build_obj.get_bpf_target(), 'zmq', build_obj.get_tcp_target()],
