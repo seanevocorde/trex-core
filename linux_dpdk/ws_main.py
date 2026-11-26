@@ -170,21 +170,58 @@ def options(opt):
                    help='use GCC 8.3 instead of the machine version')
 
 
+def get_missing_shlib_deps(ldd_prog, so_path):
+    cmd = '%s %s' % (ldd_prog, so_path)
+    ret, out = getstatusoutput(cmd)
+    if ret or not out:
+        return None, "Command of checking libraries '%s' failed.\nReturn status: %s\nOutput: %s" % (cmd, ret, out)
+    missing = [line for line in out.splitlines() if '=> not found' in line]
+    return missing, out
+
+
 def check_ibverbs_deps(bld):
     if 'LDD' not in bld.env or not len(bld.env['LDD']):
         bld.fatal('Please run configure. Missing key LDD.')
-    cmd = '%s %s/external_libs/ibverbs/%s/libibverbs.so' % (bld.env['LDD'][0], top, march)
-    ret, out = getstatusoutput(cmd)
-    if ret or not out:
-        bld.fatal("Command of checking libraries '%s' failed.\nReturn status: %s\nOutput: %s" % (cmd, ret, out))
-    if '=> not found' in out:
+    so_file = '%s/external_libs/ibverbs/%s/libibverbs.so' % (top, march)
+    missing, out = get_missing_shlib_deps(bld.env['LDD'][0], so_file)
+    if missing is None:
+        bld.fatal(out)
+    if missing:
         Logs.pprint('YELLOW', 'Could not find dependency libraries of libibverbs.so:')
-        for line in out.splitlines():
-            if '=> not found' in line:
-                Logs.pprint('YELLOW', line)
+        for line in missing:
+            Logs.pprint('YELLOW', line)
         dumy_libs_path = os.path.abspath(top + 'scripts/dumy_libs')
         Logs.pprint('YELLOW', 'Adding rpath of %s' % dumy_libs_path)
         rpath_linkage.append(dumy_libs_path)
+
+
+def check_zmq_deps(ctx, allow_sys_fallback=False):
+    if 'LDD' not in ctx.env or not len(ctx.env['LDD']):
+        ctx.fatal('Please run configure. Missing key LDD.')
+    bundled_zmq = os.path.join(top, 'external_libs', 'zmq', march, 'libzmq.so')
+    missing, out = get_missing_shlib_deps(ctx.env['LDD'][0], bundled_zmq)
+    if missing is None or missing:
+        if allow_sys_fallback:
+            Logs.pprint('YELLOW', 'Bundled %s has missing dependencies:' % bundled_zmq)
+            if missing:
+                for line in missing:
+                    Logs.pprint('YELLOW', line)
+            else:
+                Logs.pprint('YELLOW', out)
+            if ctx.check_cxx(lib='zmq', header_name='zmq.h', mandatory=False):
+                ctx.env.USE_SYS_ZMQ = True
+                Logs.pprint('GREEN', 'Info: Using system libzmq.')
+                return
+        ctx.fatal(
+            'Cannot use bundled %s (missing runtime dependencies such as libpgm-5.2.so.0) '
+            'and system libzmq / zmq.h was not found.\n'
+            'Options to fix:\n'
+            '  1) Install system ZeroMQ dev package (Ubuntu/Debian: sudo apt install libzmq3-dev; '
+            'RHEL/CentOS/openEuler: sudo yum install zeromq-devel) and re-run ./b configure\n'
+            '  2) Build libzmq v4.3.x without OpenPGM into external_libs/zmq/%s/ '
+            '(including include/zmq*.h) per doc/arm64_build_guide.md\n'
+            '  3) Install libpgm-5.2 (e.g., libpgm-5.2-0 / openpgm)' % (bundled_zmq, march)
+        )
 
 
 def missing_pkg_msg(fedora, ubuntu):
@@ -836,6 +873,8 @@ def configure(conf):
 
     conf.find_program('ldd')
     conf.check_cxx(lib = 'z', errmsg = missing_pkg_msg(fedora = 'zlib-devel', ubuntu = 'zlib1g-dev'))
+    conf.env.USE_SYS_ZMQ = False
+    check_zmq_deps(conf, allow_sys_fallback=True)
     no_mlx          = conf.options.no_mlx
     no_bnxt         = conf.options.no_bnxt
     with_mana       = conf.options.with_mana
@@ -1271,117 +1310,17 @@ version_src = SrcGroup(
 
 dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
         src_list=[
-                 #enic
-                 'drivers/net/enic/enic_ethdev.c',
-                 'drivers/net/enic/base/vnic_intr.c',
-                 'drivers/net/enic/base/vnic_rq.c',
-                 'drivers/net/enic/base/vnic_wq.c',
-                 'drivers/net/enic/base/vnic_dev.c',
-                 'drivers/net/enic/base/vnic_cq.c',
+                 #ICE SSE
+                 'drivers/net/intel/ice/ice_rxtx_vec_sse.c',
 
-                 'drivers/net/enic/enic_vf_representor.c',
-                 'drivers/net/enic/enic_flow.c',
-                 'drivers/net/enic/enic_fm_flow.c',
-                 'drivers/net/enic/enic_rxtx.c',
-                 'drivers/net/enic/enic_res.c',
-                 'drivers/net/enic/enic_main.c',
-                 'drivers/net/enic/enic_sriov.c',
-
-                 #ICE   
-                'drivers/net/intel/ice/base/ice_vlan_mode.c',
-                'drivers/net/intel/ice/base/ice_acl.c',
-                'drivers/net/intel/ice/base/ice_acl_ctrl.c',
-                'drivers/net/intel/ice/base/ice_controlq.c',
-                'drivers/net/intel/ice/base/ice_common.c',
-                'drivers/net/intel/ice/base/ice_sched.c',
-                'drivers/net/intel/ice/base/ice_switch.c',
-                'drivers/net/intel/ice/base/ice_nvm.c',
-                'drivers/net/intel/ice/base/ice_flex_pipe.c',
-                'drivers/net/intel/ice/base/ice_flow.c',
-                'drivers/net/intel/ice/base/ice_dcb.c',
-                'drivers/net/intel/ice/base/ice_fdir.c',
-                'drivers/net/intel/ice/base/ice_ptp_hw.c',
-                'drivers/net/intel/ice/base/ice_parser.c',
-                'drivers/net/intel/ice/base/ice_parser_rt.c',
-                'drivers/net/intel/ice/base/ice_pg_cam.c',
-                'drivers/net/intel/ice/base/ice_xlt_kb.c',
-                'drivers/net/intel/ice/base/ice_flg_rd.c',
-                'drivers/net/intel/ice/base/ice_ptype_mk.c',
-                'drivers/net/intel/ice/base/ice_bst_tcam.c',
-                'drivers/net/intel/ice/base/ice_proto_grp.c',
-                'drivers/net/intel/ice/base/ice_mk_grp.c',
-                'drivers/net/intel/ice/base/ice_imem.c',
-                'drivers/net/intel/ice/base/ice_metainit.c',
-                'drivers/net/intel/ice/base/ice_ddp.c',
-
-                'drivers/net/intel/ice/ice_dcf_vf_representor.c',
-                'drivers/net/intel/ice/ice_acl_filter.c',
-                'drivers/net/intel/ice/ice_dcf.c',
-                'drivers/net/intel/ice/ice_dcf_ethdev.c',
-                'drivers/net/intel/ice/ice_dcf_parent.c',
-                'drivers/net/intel/ice/ice_ethdev.c',
-                'drivers/net/intel/ice/ice_rxtx.c',
-                'drivers/net/intel/ice/ice_rxtx_vec_sse.c',
-                'drivers/net/intel/ice/ice_switch_filter.c',
-                'drivers/net/intel/ice/ice_fdir_filter.c',
-                'drivers/net/intel/ice/ice_hash.c',
-                #'drivers/net/intel/ice/ice_rxtx_vec_avx2.c',
-                #'drivers/net/intel/ice/ice_rxtx_vec_avx512.c',
-                'drivers/net/intel/ice/ice_generic_flow.c',
-                'drivers/net/intel/ice/ice_dcf_sched.c',
-                'drivers/net/intel/ice/ice_tm.c',
-
-                 #ixgbe
-                 'drivers/net/intel/ixgbe/base/ixgbe_82598.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_82599.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_api.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_common.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_dcb.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_dcb_82598.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_dcb_82599.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_hv_vf.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_mbx.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_phy.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_vf.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_x540.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_x550.c',
-                 'drivers/net/intel/ixgbe/base/ixgbe_e610.c',
-                 'drivers/net/intel/ixgbe/ixgbe_ethdev.c',
-                 'drivers/net/intel/ixgbe/ixgbe_fdir.c',
-                 'drivers/net/intel/ixgbe/ixgbe_flow.c',
-                 'drivers/net/intel/ixgbe/ixgbe_pf.c',
-                 'drivers/net/intel/ixgbe/ixgbe_rxtx.c',
+                 #ixgbe SSE
                  'drivers/net/intel/ixgbe/ixgbe_rxtx_vec_sse.c',
-                 #'drivers/net/intel/ixgbe/ixgbe_ipsec.c',
-                 'drivers/net/intel/ixgbe/ixgbe_tm.c',
-                 'drivers/net/intel/ixgbe/ixgbe_vf_representor.c',
-                 'drivers/net/intel/ixgbe/rte_pmd_ixgbe.c',
 
-                #  #i40e
+                 #i40e SSE
                  'drivers/net/intel/i40e/i40e_rxtx_vec_sse.c',
 
-                 #igc
-                 'drivers/net/intel/e1000/igc_txrx.c',
-                 'drivers/net/intel/e1000/igc_ethdev.c',
-                 'drivers/net/intel/e1000/igc_filter.c',
-                 'drivers/net/intel/e1000/igc_flow.c',
-                 'drivers/net/intel/e1000/igc_logs.c',
-
-                 #virtio
+                 #virtio SSE
                  'drivers/net/virtio/virtio_rxtx_simple_sse.c',
-
-                 #vmxnet3
-                 'drivers/net/vmxnet3/vmxnet3_ethdev.c',
-                 'drivers/net/vmxnet3/vmxnet3_rxtx.c',
-
-                 #af_packet
-                 'drivers/net/af_packet/rte_eth_af_packet.c',
-
-                # #  #Amazone ENA
-                 'drivers/net/ena/ena_ethdev.c',
-                 'drivers/net/ena/ena_rss.c',
-                 'drivers/net/ena/base/ena_com.c',
-                 'drivers/net/ena/base/ena_eth_com.c',
 
                  #libs
                  'lib/eal/x86/rte_cpuflags.c',
@@ -1390,62 +1329,13 @@ dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
                  'lib/eal/x86/rte_hypervisor.c',
                  'lib/eal/x86/rte_mmu.c',
 
-                 #'lib/librte_security/rte_security.c',
-
-                 #failsafe
-
-                 'drivers/net/failsafe/failsafe.c',
-                 'drivers/net/failsafe/failsafe_args.c',
-                 'drivers/net/failsafe/failsafe_eal.c',
-                 'drivers/net/failsafe/failsafe_ops.c',
-                 'drivers/net/failsafe/failsafe_rxtx.c',
-                 'drivers/net/failsafe/failsafe_ether.c',
-                 'drivers/net/failsafe/failsafe_flow.c',
-                 'drivers/net/failsafe/failsafe_intr.c',
-
-                 #gve
-                 'drivers/net/gve/base/gve_adminq.c',
-                 'drivers/net/gve/gve_rx.c',
-                 'drivers/net/gve/gve_tx.c',
-                 'drivers/net/gve/gve_rx_dqo.c',
-                 'drivers/net/gve/gve_tx_dqo.c',
-                 'drivers/net/gve/gve_ethdev.c',
-                 'drivers/net/gve/gve_version.c',
-                 'drivers/net/gve/gve_rss.c',
-
-                 #vdev_netvsc
-                 'drivers/net/vdev_netvsc/vdev_netvsc.c',
-
-                 #netvsc
-                 'drivers/net/netvsc/hn_ethdev.c',
-                 'drivers/net/netvsc/hn_rxtx.c',
-                 'drivers/net/netvsc/hn_rndis.c',
-                 'drivers/net/netvsc/hn_nvs.c',
-                 'drivers/net/netvsc/hn_vf.c',
-
-                 #ip_frag
-                 'lib/ip_frag/rte_ipv4_fragmentation.c',
-                 'lib/ip_frag/rte_ipv6_fragmentation.c',
-                 'lib/ip_frag/rte_ipv4_reassembly.c',
-                 'lib/ip_frag/rte_ipv6_reassembly.c',
-                 'lib/ip_frag/rte_ip_frag_common.c',
-                 'lib/ip_frag/ip_frag_internal.c',
-
-                 #bonding
-                 'drivers/net/bonding/rte_eth_bond_api.c',
-                 'drivers/net/bonding/rte_eth_bond_pmd.c',
-                 'drivers/net/bonding/rte_eth_bond_flow.c',
-                 'drivers/net/bonding/rte_eth_bond_args.c',
-                 'drivers/net/bonding/rte_eth_bond_8023ad.c',
-                 'drivers/net/bonding/rte_eth_bond_alb.c',
-
                  #vec sse
                  'drivers/net/bnxt/bnxt_rxtx_vec_sse.c',
                  'drivers/net/intel/iavf/iavf_rxtx_vec_sse.c',
                  'lib/net/net_crc_sse.c',
                  ])
 
-dpdk_src_x86_64_ext = SrcGroup(dir='src',
+dpdk_src_ext = SrcGroup(dir='src',
         src_list=[
                     'drivers/trex_ixgbe_fdir.c',
                     'drivers/trex_i40e_fdir.c',
@@ -1828,7 +1718,154 @@ dpdk_src = SrcGroup(dir='src/dpdk/',
                  'lib/log/log_color.c',
                  'lib/log/log_timestamp.c',
 
-                 'lib/hash/rte_hash_crc.c'
+                 'lib/hash/rte_hash_crc.c',
+
+                 #enic
+                 'drivers/net/enic/enic_ethdev.c',
+                 'drivers/net/enic/base/vnic_intr.c',
+                 'drivers/net/enic/base/vnic_rq.c',
+                 'drivers/net/enic/base/vnic_wq.c',
+                 'drivers/net/enic/base/vnic_dev.c',
+                 'drivers/net/enic/base/vnic_cq.c',
+
+                 'drivers/net/enic/enic_vf_representor.c',
+                 'drivers/net/enic/enic_flow.c',
+                 'drivers/net/enic/enic_fm_flow.c',
+                 'drivers/net/enic/enic_rxtx.c',
+                 'drivers/net/enic/enic_res.c',
+                 'drivers/net/enic/enic_main.c',
+                 'drivers/net/enic/enic_sriov.c',
+
+                 #ICE
+                 'drivers/net/intel/ice/base/ice_vlan_mode.c',
+                 'drivers/net/intel/ice/base/ice_acl.c',
+                 'drivers/net/intel/ice/base/ice_acl_ctrl.c',
+                 'drivers/net/intel/ice/base/ice_controlq.c',
+                 'drivers/net/intel/ice/base/ice_common.c',
+                 'drivers/net/intel/ice/base/ice_sched.c',
+                 'drivers/net/intel/ice/base/ice_switch.c',
+                 'drivers/net/intel/ice/base/ice_nvm.c',
+                 'drivers/net/intel/ice/base/ice_flex_pipe.c',
+                 'drivers/net/intel/ice/base/ice_flow.c',
+                 'drivers/net/intel/ice/base/ice_dcb.c',
+                 'drivers/net/intel/ice/base/ice_fdir.c',
+                 'drivers/net/intel/ice/base/ice_ptp_hw.c',
+                 'drivers/net/intel/ice/base/ice_parser.c',
+                 'drivers/net/intel/ice/base/ice_parser_rt.c',
+                 'drivers/net/intel/ice/base/ice_pg_cam.c',
+                 'drivers/net/intel/ice/base/ice_xlt_kb.c',
+                 'drivers/net/intel/ice/base/ice_flg_rd.c',
+                 'drivers/net/intel/ice/base/ice_ptype_mk.c',
+                 'drivers/net/intel/ice/base/ice_bst_tcam.c',
+                 'drivers/net/intel/ice/base/ice_proto_grp.c',
+                 'drivers/net/intel/ice/base/ice_mk_grp.c',
+                 'drivers/net/intel/ice/base/ice_imem.c',
+                 'drivers/net/intel/ice/base/ice_metainit.c',
+                 'drivers/net/intel/ice/base/ice_ddp.c',
+
+                 'drivers/net/intel/ice/ice_dcf_vf_representor.c',
+                 'drivers/net/intel/ice/ice_acl_filter.c',
+                 'drivers/net/intel/ice/ice_dcf.c',
+                 'drivers/net/intel/ice/ice_dcf_ethdev.c',
+                 'drivers/net/intel/ice/ice_dcf_parent.c',
+                 'drivers/net/intel/ice/ice_ethdev.c',
+                 'drivers/net/intel/ice/ice_rxtx.c',
+                 'drivers/net/intel/ice/ice_switch_filter.c',
+                 'drivers/net/intel/ice/ice_fdir_filter.c',
+                 'drivers/net/intel/ice/ice_hash.c',
+                 'drivers/net/intel/ice/ice_generic_flow.c',
+                 'drivers/net/intel/ice/ice_dcf_sched.c',
+                 'drivers/net/intel/ice/ice_tm.c',
+
+                 #ixgbe
+                 'drivers/net/intel/ixgbe/base/ixgbe_82598.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_82599.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_api.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_common.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_dcb.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_dcb_82598.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_dcb_82599.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_hv_vf.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_mbx.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_phy.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_vf.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_x540.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_x550.c',
+                 'drivers/net/intel/ixgbe/base/ixgbe_e610.c',
+                 'drivers/net/intel/ixgbe/ixgbe_ethdev.c',
+                 'drivers/net/intel/ixgbe/ixgbe_fdir.c',
+                 'drivers/net/intel/ixgbe/ixgbe_flow.c',
+                 'drivers/net/intel/ixgbe/ixgbe_pf.c',
+                 'drivers/net/intel/ixgbe/ixgbe_rxtx.c',
+                 'drivers/net/intel/ixgbe/ixgbe_tm.c',
+                 'drivers/net/intel/ixgbe/ixgbe_vf_representor.c',
+                 'drivers/net/intel/ixgbe/rte_pmd_ixgbe.c',
+
+                 #igc
+                 'drivers/net/intel/e1000/igc_txrx.c',
+                 'drivers/net/intel/e1000/igc_ethdev.c',
+                 'drivers/net/intel/e1000/igc_filter.c',
+                 'drivers/net/intel/e1000/igc_flow.c',
+                 'drivers/net/intel/e1000/igc_logs.c',
+
+                 #vmxnet3
+                 'drivers/net/vmxnet3/vmxnet3_ethdev.c',
+                 'drivers/net/vmxnet3/vmxnet3_rxtx.c',
+
+                 #af_packet
+                 'drivers/net/af_packet/rte_eth_af_packet.c',
+
+                 #Amazon ENA
+                 'drivers/net/ena/ena_ethdev.c',
+                 'drivers/net/ena/ena_rss.c',
+                 'drivers/net/ena/base/ena_com.c',
+                 'drivers/net/ena/base/ena_eth_com.c',
+
+                 #failsafe
+                 'drivers/net/failsafe/failsafe.c',
+                 'drivers/net/failsafe/failsafe_args.c',
+                 'drivers/net/failsafe/failsafe_eal.c',
+                 'drivers/net/failsafe/failsafe_ops.c',
+                 'drivers/net/failsafe/failsafe_rxtx.c',
+                 'drivers/net/failsafe/failsafe_ether.c',
+                 'drivers/net/failsafe/failsafe_flow.c',
+                 'drivers/net/failsafe/failsafe_intr.c',
+
+                 #gve
+                 'drivers/net/gve/base/gve_adminq.c',
+                 'drivers/net/gve/gve_rx.c',
+                 'drivers/net/gve/gve_tx.c',
+                 'drivers/net/gve/gve_rx_dqo.c',
+                 'drivers/net/gve/gve_tx_dqo.c',
+                 'drivers/net/gve/gve_ethdev.c',
+                 'drivers/net/gve/gve_version.c',
+                 'drivers/net/gve/gve_rss.c',
+
+                 #vdev_netvsc
+                 'drivers/net/vdev_netvsc/vdev_netvsc.c',
+
+                 #netvsc
+                 'drivers/net/netvsc/hn_ethdev.c',
+                 'drivers/net/netvsc/hn_rxtx.c',
+                 'drivers/net/netvsc/hn_rndis.c',
+                 'drivers/net/netvsc/hn_nvs.c',
+                 'drivers/net/netvsc/hn_vf.c',
+
+                 #ip_frag
+                 'lib/ip_frag/rte_ipv4_fragmentation.c',
+                 'lib/ip_frag/rte_ipv6_fragmentation.c',
+                 'lib/ip_frag/rte_ipv4_reassembly.c',
+                 'lib/ip_frag/rte_ipv6_reassembly.c',
+                 'lib/ip_frag/rte_ip_frag_common.c',
+                 'lib/ip_frag/ip_frag_internal.c',
+
+                 #bonding
+                 'drivers/net/bonding/rte_eth_bond_api.c',
+                 'drivers/net/bonding/rte_eth_bond_pmd.c',
+                 'drivers/net/bonding/rte_eth_bond_flow.c',
+                 'drivers/net/bonding/rte_eth_bond_args.c',
+                 'drivers/net/bonding/rte_eth_bond_8023ad.c',
+                 'drivers/net/bonding/rte_eth_bond_alb.c'
 
             ])
 
@@ -2337,7 +2374,6 @@ includes_path = '''
                    ../src/utils/
                    ../src/hdrh/
                    ../external_libs/yaml-cpp/include/
-                   ../external_libs/zmq/''' + march + '''/include/
                    ../external_libs/json/
                    ../external_libs/md5/
                    ../external_libs/bpf/
@@ -2666,7 +2702,7 @@ def build_prog (bld, build_obj):
                     dpdk_src,
                     i40e_dpdk_src,
                     dpdk_src_x86_64,
-                    dpdk_src_x86_64_ext
+                    dpdk_src_ext
                     ])
         
         if bld.env.TAP:
@@ -2681,7 +2717,8 @@ def build_prog (bld, build_obj):
         bp_dpdk = SrcGroups([
                     dpdk_src,
                     i40e_dpdk_src,
-                    dpdk_src_aarch64
+                    dpdk_src_aarch64,
+                    dpdk_src_ext
                     ])
 
         if bld.env.TAP:
@@ -2694,7 +2731,8 @@ def build_prog (bld, build_obj):
         bp_dpdk = SrcGroups([
                     dpdk_src,
                     i40e_dpdk_src,
-                    dpdk_src_ppc64le
+                    dpdk_src_ppc64le,
+                    dpdk_src_ext
                     ])
 
         # BPF + JIT
@@ -2810,7 +2848,15 @@ def build_prog (bld, build_obj):
         target   = build_obj.get_tcp_target()
         )
 
-    inc_path = dpdk_includes_path + includes_path
+    use_libs = [build_obj.get_dpdk_target(), build_obj.get_bpf_target(), build_obj.get_tcp_target()]
+    if bld.env.USE_SYS_ZMQ:
+        lib_ext.append('zmq')
+        zmq_inc = ''
+    else:
+        use_libs.append('zmq')
+        zmq_inc = '../external_libs/zmq/' + march + '/include/ '
+
+    inc_path = dpdk_includes_path + includes_path + zmq_inc
     cxxflags_ext = ['-include', '../src/pal/linux_dpdk/dpdk_2507_' + march + '/rte_config.h'] if march in ('x86_64', 'aarch64') else []
 
     bld.program(features='cxx cxxprogram',
@@ -2818,7 +2864,7 @@ def build_prog (bld, build_obj):
                 cxxflags = ( cxxflags + cxxflags_ext + ['-std=gnu++11']),
                 linkflags = linkflags ,
                 lib=['pthread','dl', 'z'] + lib_ext,
-                use =[build_obj.get_dpdk_target(), build_obj.get_bpf_target(), 'zmq', build_obj.get_tcp_target()],
+                use =use_libs,
                 source = bp.file_list(top) + debug_file_list,
                 rpath = rpath_linkage,
                 target = build_obj.get_target())
@@ -2876,8 +2922,12 @@ def build(bld):
     bld.add_post_fun(post_build)
 
     # ZMQ
-    zmq_lib_path='external_libs/zmq/' + march + '/'
-    bld.read_shlib( name='zmq' , paths=[top + zmq_lib_path] )
+    if bld.env.USE_SYS_ZMQ:
+        Logs.pprint('GREEN', 'Info: Using system libzmq.')
+    else:
+        check_zmq_deps(bld, allow_sys_fallback=False)
+        zmq_lib_path='external_libs/zmq/' + march + '/'
+        bld.read_shlib( name='zmq' , paths=[top + zmq_lib_path] )
 
     if bld.env.NO_MLX != 'all':
         if bld.env.LIB_IBVERBS:

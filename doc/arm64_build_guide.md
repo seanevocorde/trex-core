@@ -30,34 +30,47 @@ TRex 采用源码内嵌 DPDK 并通过 Waf 构建系统进行管理的方式。�
 
 ### 1. ZeroMQ 动态库（运行必须）
 
-TRex 的 C++ 核心与 Python RPC 客户端之间重度依赖 ZeroMQ。当前仓库历史遗留的是 2018 年的 `libzmq.so.3`，需要替换为 ZeroMQ 4.3.x (`libzmq.so.5`)。
+TRex 的 C++ 核心与 Python RPC 客户端之间重度依赖 ZeroMQ。当前仓库历史遗留的是 2018 年的 `libzmq.so.3`，它额外依赖 `libpgm-5.2.so.0`，在较新的 ARM64 发行版上可能会在链接阶段出现 `libpgm-5.2.so.0 not found` / `undefined reference to pgm_*`。
+
+可通过以下两种方式之一解决：
+
+* **方式 A（推荐，最简单）：安装系统 ZeroMQ 开发包**
+  ```bash
+  # Ubuntu / Debian
+  sudo apt install -y libzmq3-dev
+  # RHEL / CentOS / openEuler
+  sudo yum install -y zeromq-devel
+  ```
+  安装后重新执行 `./b configure` 即可。构建脚本检测到内置 `libzmq.so` 缺少依赖时会自动切换为系统 `libzmq` 和系统 `<zmq.h>`。
+
+* **方式 B：从源码编译 ZeroMQ 4.3.x (`libzmq.so.5`)**
+  若需要随包独立分发，在 ARM64 机器上执行：
+  ```bash
+  # 下载并编译 ZeroMQ（不启用 OpenPGM，避免 libpgm 依赖）
+  git clone https://github.com/zeromq/libzmq.git -b v4.3.5
+  cd libzmq
+  ./autogen.sh
+  ./configure --prefix=/tmp/zmq_arm64 --without-docs
+  make -j$(nproc) && make install
+
+  # 回到 trex-core 根目录，拷贝动态库及头文件（注意必须同步更新头文件，因为 zmq_msg_t 大小在 3.x 为 32B 而 4.x 为 64B）
+  cp /tmp/zmq_arm64/lib/libzmq.so.5* external_libs/zmq/aarch64/
+  ln -sf libzmq.so.5 external_libs/zmq/aarch64/libzmq.so
+  cp /tmp/zmq_arm64/include/zmq*.h external_libs/zmq/aarch64/include/
+
+  mkdir -p scripts/so/aarch64
+  cp /tmp/zmq_arm64/lib/libzmq.so.5* scripts/so/aarch64/
+
+  mkdir -p scripts/external_libs/pyzmq-ctypes/zmq/arm
+  cp /tmp/zmq_arm64/lib/libzmq.so.5 scripts/external_libs/pyzmq-ctypes/zmq/arm/libzmq.so
+  ```
 
 | 目标文件位置 | 作用 | 说明 |
 | :--- | :--- | :--- |
 | `external_libs/zmq/aarch64/libzmq.so` | 编译期链接与静态分发 | 放置编译生成的 `libzmq.so` (或软链接到 `libzmq.so.5`) |
+| `external_libs/zmq/aarch64/include/zmq*.h` | 编译期头文件 | 必须与 `libzmq.so` 主版本保持一致 |
 | `scripts/so/aarch64/libzmq.so.5` | 运行期动态加载 | TRex 可执行程序启动时通过 rpath 加载 |
 | `scripts/external_libs/pyzmq-ctypes/zmq/arm/libzmq.so` | Python 客户端调用 | 供 TRex 控制台脚本（trex-console、Scapy RPC 服务）调用 |
-
-#### 编译与部署步骤：
-在 ARM64 机器上执行：
-```bash
-# 下载并编译 ZeroMQ
-git clone https://github.com/zeromq/libzmq.git -b v4.3.5
-cd libzmq
-./autogen.sh
-./configure --prefix=/tmp/zmq_arm64 --without-docs
-make -j$(nproc) && make install
-
-# 回到 trex-core 根目录，拷贝动态库
-cp /tmp/zmq_arm64/lib/libzmq.so.5* external_libs/zmq/aarch64/
-ln -sf libzmq.so.5 external_libs/zmq/aarch64/libzmq.so
-
-mkdir -p scripts/so/aarch64
-cp /tmp/zmq_arm64/lib/libzmq.so.5* scripts/so/aarch64/
-
-mkdir -p scripts/external_libs/pyzmq-ctypes/zmq/arm
-cp /tmp/zmq_arm64/lib/libzmq.so.5 scripts/external_libs/pyzmq-ctypes/zmq/arm/libzmq.so
-```
 
 ---
 

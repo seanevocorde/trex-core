@@ -4940,7 +4940,7 @@ ice_fdir_programming(struct ice_pf *pf, struct ice_fltr_desc *fdir_desc)
 
 }
 
-#ifndef CC_AVX2_SUPPORT
+#if defined(RTE_ARCH_X86) && !defined(CC_AVX2_SUPPORT)
 uint16_t
 ice_recv_pkts_vec_avx2(void *rx_queue,
 			struct rte_mbuf **rx_pkts,
@@ -4988,4 +4988,4 @@ ice_xmit_pkts_vec_avx2_offload(void *tx_queue,
 {
 	return ice_xmit_pkts_vec(tx_queue,tx_pkts,nb_pkts);
 }
-#endif /* ifndef CC_AVX2_SUPPORT */
+#endif /* if defined(RTE_ARCH_X86) && !defined(CC_AVX2_SUPPORT) */

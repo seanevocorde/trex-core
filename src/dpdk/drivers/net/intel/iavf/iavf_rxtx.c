@@ -5109,14 +5109,14 @@ iavf_set_default_ptype_table(struct rte_eth_dev *dev)
 		ad->ptype_tbl[i] = iavf_get_default_ptype(i);
 }
 
-#ifndef CC_AVX2_SUPPORT
+#if defined(RTE_ARCH_X86) && !defined(CC_AVX2_SUPPORT)
 
 uint16_t
 iavf_recv_scattered_pkts_vec_avx2_flex_rxd(void *rx_queue,
                                            struct rte_mbuf **rx_pkts,
                                            uint16_t nb_pkts)
 {
-    iavf_recv_scattered_pkts_vec_flex_rxd(rx_queue, rx_pkts, nb_pkts);
+    return iavf_recv_scattered_pkts_vec_flex_rxd(rx_queue, rx_pkts, nb_pkts);
 }
 
 uint16_t
@@ -5124,7 +5124,7 @@ iavf_recv_scattered_pkts_vec_avx2(void *rx_queue,
                                   struct rte_mbuf **rx_pkts,
                                   uint16_t nb_pkts)
 {
-    iavf_recv_scattered_pkts_vec(rx_queue, rx_pkts, nb_pkts);
+    return iavf_recv_scattered_pkts_vec(rx_queue, rx_pkts, nb_pkts);
 }
 
 uint16_t
@@ -5132,7 +5132,7 @@ iavf_recv_pkts_vec_avx2_flex_rxd(void *rx_queue,
                                 struct rte_mbuf **rx_pkts,
                                 uint16_t nb_pkts)
 {
-    iavf_recv_pkts_vec_flex_rxd(rx_queue, rx_pkts, nb_pkts);
+    return iavf_recv_pkts_vec_flex_rxd(rx_queue, rx_pkts, nb_pkts);
 }
 
 
@@ -5141,7 +5141,7 @@ iavf_recv_pkts_vec_avx2(void *rx_queue,
                         struct rte_mbuf **rx_pkts,
                         uint16_t nb_pkts)
 {
-    iavf_recv_pkts_vec(rx_queue, rx_pkts, nb_pkts);
+    return iavf_recv_pkts_vec(rx_queue, rx_pkts, nb_pkts);
 }
 
 uint16_t
@@ -5149,7 +5149,7 @@ iavf_xmit_pkts_vec_avx2(void *tx_queue,
                         struct rte_mbuf **tx_pkts,
                         uint16_t nb_pkts)
 {
-    iavf_xmit_pkts_vec(tx_queue, tx_pkts, nb_pkts);
+    return iavf_xmit_pkts_vec(tx_queue, tx_pkts, nb_pkts);
 }
 
-#endif /* ifndef CC_AVX2_SUPPORT */
+#endif /* if defined(RTE_ARCH_X86) && !defined(CC_AVX2_SUPPORT) */
