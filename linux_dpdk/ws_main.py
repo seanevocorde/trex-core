@@ -1359,7 +1359,6 @@ dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
 
                 #  #i40e
                  'drivers/net/intel/i40e/i40e_rxtx_vec_sse.c',
-                 'drivers/net/intel/i40e/i40e_recycle_mbufs_vec_common.c',
 
                  #igc
                  'drivers/net/intel/e1000/igc_txrx.c',
@@ -1443,6 +1442,7 @@ dpdk_src_x86_64 = SrcGroup(dir='src/dpdk/',
                  #vec sse
                  'drivers/net/bnxt/bnxt_rxtx_vec_sse.c',
                  'drivers/net/intel/iavf/iavf_rxtx_vec_sse.c',
+                 'lib/net/net_crc_sse.c',
                  ])
 
 dpdk_src_x86_64_ext = SrcGroup(dir='src',
@@ -1474,6 +1474,9 @@ dpdk_src_aarch64 = SrcGroup(dir='src/dpdk/',
                  'drivers/net/intel/i40e/i40e_rxtx_vec_neon.c',
                  'drivers/net/intel/iavf/iavf_rxtx_vec_neon.c',
                  'drivers/net/bnxt/bnxt_rxtx_vec_neon.c',
+
+                 #net crc neon
+                 'lib/net/net_crc_neon.c',
 
                  #libs
                  'lib/eal/arm/rte_cpuflags.c',
@@ -1809,7 +1812,6 @@ dpdk_src = SrcGroup(dir='src/dpdk/',
                  'lib/net/rte_net.c',
                  'lib/net/rte_net_crc.c',
                  'lib/net/rte_arp.c',
-                 'lib/net/net_crc_sse.c',
                  'lib/pci/rte_pci.c',
                  'lib/ring/rte_ring.c',
                  'lib/timer/rte_timer.c',
@@ -1876,6 +1878,7 @@ i40e_dpdk_src = SrcGroup(
         'i40e_rxtx.c',
         'i40e_tm.c',
         'i40e_vf_representor.c',
+        'i40e_recycle_mbufs_vec_common.c',
         'rte_pmd_i40e.c',
     ])
 
@@ -2351,7 +2354,7 @@ bpf_includes_path = '../external_libs/bpf ../external_libs/bpf/bpfjit'
 if march == 'x86_64':
     DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk_2507_x86_64/rte_config.h','-DALLOW_INTERNAL_API','-DABI_VERSION="25.2"']
 elif march == 'aarch64':
-    DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-include', '../src/pal/linux_dpdk/dpdk_2507_aarch64/rte_config.h', '-DALLOW_INTERNAL_API', '-DABI_VERSION="25.2"']
+    DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DVF_DRIVER', '-DINTEGRATED_VF', '-DRTE_FORCE_INTRINSICS', '-DCC_ARM64_NEON_PMULL_SUPPORT', '-include', '../src/pal/linux_dpdk/dpdk_2507_aarch64/rte_config.h', '-DALLOW_INTERNAL_API', '-DABI_VERSION="25.2"']
 elif march == 'ppc64le':
     DPDK_FLAGS=['-DTAP_MAX_QUEUES=16','-D_GNU_SOURCE', '-DPF_DRIVER', '-DX722_SUPPORT', '-DX722_A0_SUPPORT', '-DVF_DRIVER', '-DINTEGRATED_VF', '-include', '../src/pal/linux_dpdk/dpdk_2507_x86_64_ppc64le/rte_config.h']
 
