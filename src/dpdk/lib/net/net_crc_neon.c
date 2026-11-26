@@ -2,6 +2,10 @@
  * Copyright(c) 2017 Cavium, Inc
  */
 
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC target("+crypto")
+#endif
+
 #include <stdalign.h>
 #include <string.h>
 
