@@ -178,3 +178,47 @@ cd linux_dpdk
 ```
 
 编译完成后，二进制主程序位于 `scripts/` 下（如 `_t-rex-64`），执行 `./t-rex-64 -v` 或使用 `./t-rex-64 -i` 即可启动交互式无状态模式验证。
+
+---
+
+## 四、 打包与工具依赖说明（`./b pkg`）
+
+当前仓库文档原先未记录构建与打包阶段所需的命令行工具依赖，执行打包前请先确认环境中已安装 `rsync` 和 `wget`。
+
+### 1. 基础命令行工具依赖（`rsync` / `wget`）
+
+* **`rsync`**（`./b pkg` 必须）：`linux_dpdk/ws_main.py` 中的 `release()`（被 `./b pkg` 调用）会执行 `rsync -r -L -v` 拷贝 `scripts/` 下的配置与脚本目录（`cap2`、`avl`、`cfg`、`ko`、`automation`、`external_libs`、`stl`、`exp`、`astf` 等）；`publish` / `publish_ext` 也依赖 `rsync`。未安装 `rsync` 会导致 `./b pkg` 直接失败。
+* **`wget`**（编译 Bird / 运维脚本依赖）：配置时若启用 `--with-bird`，`linux_dpdk/compile_bird.py` 会通过 `wget` 下载 Bird 源码压缩包；此外 `scripts/master_daemon.py` 等脚本也依赖 `wget`。
+
+安装命令：
+
+```bash
+# Ubuntu / Debian
+sudo apt install -y rsync wget
+
+# RHEL / CentOS / openEuler
+sudo yum install -y rsync wget
+```
+
+### 2. `./b pkg` 打包注意事项
+
+1. **`bp-sim-64` / `bp-sim-64-debug` 缺失问题**：
+   * 这两个离线模拟器程序由 `linux/` 目录（而非 `linux_dpdk/`）构建。仅编译 `linux_dpdk/` 后直接运行 `./b pkg` 会因 `scripts/bp-sim-64` 不存在而中断。
+   * 如需使用 `./b pkg` 打包完整发布包，需先在 `linux/` 下编译：
+     ```bash
+     cd linux
+     ./b configure && ./b build -j$(nproc)
+     cd ../linux_dpdk
+     ./b pkg --pkg-dir=/tmp --pkg-file=trex-arm64.tar.gz
+     ```
+   * 若无需模拟器且不想修改 `linux_dpdk/ws_main.py`，可在仓库根目录直接用 `tar --dereference` 打包 `scripts/`（未启用 `--with-bird` 时需排除悬空软链接 `scripts/bird`）：
+     ```bash
+     tar --dereference \
+         --exclude='*.pyc' \
+         --exclude='__pycache__' \
+         --exclude='scripts/bird' \
+         -czvf trex-arm64.tar.gz scripts/
+     ```
+2. **输出路径与体积限制**：
+   * `./b pkg` 默认读取 `VERSION` 文件并在上级目录生成 `<VERSION>.tar.gz`，可用 `--pkg-dir` 与 `--pkg-file` 自定义路径和文件名。
+   * `linux_dpdk/ws_main.py` 中设置了 `MAX_PKG_SIZE = 290`（MB）限制，打包时会一并解引用拷贝 `scripts/so/` 下的全部分发库（含 `x86_64`、`ppc64le` 等目录）。若触发体积超限，需清理无关架构的 `scripts/so/<arch>/` 目录或对 `.so` 执行 `strip`。
