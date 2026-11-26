@@ -2568,7 +2568,7 @@ class build_option:
         if self.isIntelPlatform() and not self.is_clang():
             flags += ['-mrtm']
 
-        if (self.isIntelPlatform() or self.isPpcPlatform()) and not self.is_clang():
+        if (self.isIntelPlatform() or self.isPpcPlatform() or self.isArmPlatform()) and not self.is_clang():
             flags += [
                       '-Wno-aligned-new'
                      ]
