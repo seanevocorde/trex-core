@@ -102,27 +102,30 @@ TRex 编译生成的可执行二进制（如 `_t-rex-64`）配置了动态库优
 
 若在 ARM64 机器上使用 Mellanox (NVIDIA) 网卡，TRex 需要 `libibverbs.so` 和 `libmlx5.so`。
 
-有两种处理方式（推荐方式 A）：
+仓库现已在 `external_libs/ibverbs/aarch64/` 下内置适配 ARM64 的 prebuilt 库与头文件（来自 AlmaLinux 8 `rdma-core 48.0-1.el8.aarch64`，最高仅依赖 `GLIBC_2.25`，支持 `IBVERBS_1.14` / `MLX5_1.24`），包含：
+* `external_libs/ibverbs/aarch64/libibverbs.so`
+* `external_libs/ibverbs/aarch64/libmlx5.so`
+* `external_libs/ibverbs/aarch64/include/infiniband/`（包含 `verbs.h`、`mlx5dv.h` 等头文件）
 
-* **方式 A（推荐）：直接使用系统或官方 OFED 驱动**
-  在 ARM 服务器上安装 Mellanox OFED 或系统 `rdma-core` 包：
+根据构建与运行环境，可按以下两种方式配置：
+
+* **方式 A（默认，使用内置 ibverbs 编译）**：
+  若编译机未安装 Mellanox OFED，直接执行 `./b configure` 即可自动使用 `external_libs/ibverbs/aarch64/` 编译 `libmlx5-64.so`（依赖系统 `libnl-3` / `libnl-route-3`，若 `ldd` 提示缺失请安装 `libnl-3-200` / `libnl3`）。运行期在目标机加载 `libmlx5-64.so` 时需安装系统 `rdma-core` / OFED 运行时库（`libibverbs1`、`ibverbs-providers`）。
+
+* **方式 B（使用系统 OFED 或发行版 `rdma-core-devel` 编译）**：
+  在 ARM 服务器上安装 Mellanox OFED 或系统 `rdma-core` 开发包：
   ```bash
   # Ubuntu / Debian
   apt-get install -y libibverbs-dev librdmacm-dev libmnl-dev
   # CentOS / RHEL / OpenEuler
   yum install -y libibverbs-devel librdmacm-devel libmnl-devel
   ```
-  在配置 TRex 时带上 `--with-ofed` 参数：
-  ```bash
-  cd linux_dpdk
-  ./b configure --with-ofed
-  ```
-
-* **方式 B：补充内嵌 prebuilt 二进制**
-  若需要独立打包运行，可将编译好的 OFED 运行时放入以下路径：
-  * `external_libs/ibverbs/aarch64/libibverbs.so`
-  * `external_libs/ibverbs/aarch64/libmlx5.so`
-  * `external_libs/ibverbs/aarch64/include/`（包含 infiniband 头文件）
+  * 若已安装 Mellanox OFED（存在 `/usr/bin/ofed_info`），直接执行 `./b configure` 即可自动识别系统 `libibverbs`。
+  * 若仅安装了发行版 `rdma-core`（无 `/usr/bin/ofed_info`），可带上 `--no-ofed-check` 参数跳过 `ofed_info` 检查并直接使用系统头文件与 `libibverbs`：
+    ```bash
+    cd linux_dpdk
+    ./b configure --no-ofed-check
+    ```
 
 ---
 
@@ -168,10 +171,12 @@ MODULE_LICENSE("GPL");
 # 1. 切换到构建目录
 cd linux_dpdk
 
-# 2. 配置 (若不使用 Mellanox 网卡，可添加 --no-mlx 避免检查 OFED)
-./b configure --no-mlx
-# 或使用系统 OFED：
-# ./b configure --with-ofed
+# 2. 配置 (默认使用仓库内置 external_libs/ibverbs/aarch64/ 构建 mlx5 PMD)
+./b configure
+# 若使用系统 rdma-core（无 ofed_info）：
+# ./b configure --no-ofed-check
+# 若不需要构建 Mellanox mlx5 PMD：
+# ./b configure --no-mlx=all
 
 # 3. 编译
 ./b build -j$(nproc)
