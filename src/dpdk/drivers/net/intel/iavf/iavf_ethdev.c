@@ -2893,8 +2893,10 @@ iavf_dev_init(struct rte_eth_dev *eth_dev)
 
 	return 0;
 
+#ifdef RTE_LIB_SECURITY
 security_init_err:
 	iavf_security_ctx_destroy(adapter);
+#endif
 
 flow_init_err:
 	iavf_disable_irq0(hw);
