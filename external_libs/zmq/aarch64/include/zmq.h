@@ -164,6 +164,12 @@ ZMQ_EXPORT const char *zmq_strerror (int errnum);
 
 ZMQ_EXPORT void *zmq_ctx_new (void);
 ZMQ_EXPORT int zmq_ctx_destroy (void *context);
+#ifndef zmq_ctx_term
+#define zmq_ctx_term zmq_ctx_destroy
+#endif
+#ifndef zmq_ctx_shutdown
+#define zmq_ctx_shutdown zmq_ctx_destroy
+#endif
 ZMQ_EXPORT int zmq_ctx_set (void *context, int option, int optval);
 ZMQ_EXPORT int zmq_ctx_get (void *context, int option);
 
