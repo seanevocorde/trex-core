@@ -707,6 +707,9 @@ void ixgbe_filterlist_flush(void);
  * Flow director function prototypes
  */
 int ixgbe_fdir_configure(struct rte_eth_dev *dev);
+#ifdef TREX_PATCH
+int trex_ixgbe_fdir_configure(struct rte_eth_dev *dev);
+#endif
 int ixgbe_fdir_set_input_mask(struct rte_eth_dev *dev);
 int ixgbe_fdir_set_flexbytes_offset(struct rte_eth_dev *dev,
 				    uint16_t offset);

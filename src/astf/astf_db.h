@@ -192,7 +192,7 @@ class CTcpDataAssocParams {
     friend bool operator== (const CTcpDataAssocParams& lhs, const CTcpDataAssocParams& rhs);
     friend bool operator< (const CTcpDataAssocParams& lhs, const CTcpDataAssocParams& rhs);
 
-    CTcpDataAssocParams() {}
+    CTcpDataAssocParams() : m_port(0), m_stream(false) {}
     CTcpDataAssocParams(uint16_t port,bool stream) {
         m_port = port;
         m_stream =stream;
@@ -211,7 +211,9 @@ class CTcpServerInfo {
     friend class CTcpDataAssocTransHelp;
 
  public:
-    CTcpServerInfo() {}
+    CTcpServerInfo()
+        : m_prog(nullptr), m_tune(nullptr), m_temp_idx(0),
+          m_ip_start(0), m_ip_end(UINT32_MAX) {}
     CTcpServerInfo(CEmulAppProgram *prog, CTcpTuneables *tune, uint32_t temp_idx) {
         m_prog = prog;
         m_tune = tune;
@@ -283,12 +285,8 @@ inline bool operator< (const CTcpDataAssocParams& lhs, const CTcpDataAssocParams
 class CTcpDataAssocTransHelp {
     friend class CTcpDataAssocTranslation;
 
-    CTcpDataAssocTransHelp(const CTcpDataAssocParams& params, CEmulAppProgram *prog, CTcpTuneables *tune, uint32_t temp_idx) {
-        m_params = params;
-        m_server_info.m_prog = prog;
-        m_server_info.m_tune = tune;
-        m_server_info.m_temp_idx = temp_idx;
-    }
+    CTcpDataAssocTransHelp(const CTcpDataAssocParams& params, CEmulAppProgram *prog, CTcpTuneables *tune, uint32_t temp_idx)
+        : m_params(params), m_server_info(prog, tune, temp_idx) {}
 
  private:
     CTcpDataAssocParams m_params;

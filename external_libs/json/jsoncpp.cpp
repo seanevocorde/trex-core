@@ -3516,6 +3516,7 @@ void Value::initBasic(ValueType vtype, bool allocated) {
   comments_ = 0;
   start_ = 0;
   limit_ = 0;
+  value_.uint_ = 0;
 }
 
 // Access an object value by name, create a null member if it does not exist.
